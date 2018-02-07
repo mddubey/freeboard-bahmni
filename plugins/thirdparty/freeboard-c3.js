@@ -5,14 +5,11 @@
         "display_name": "C3 Widget",
         "description": "Very simple and basic wrapper around C3, which is a wrapper around D3 for each reusable graphs.",
         "external_scripts": [
-            "https://cdnjs.cloudflare.com/ajax/libs/d3/4.13.0/d3.min.js",
-            "https://cdnjs.cloudflare.com/ajax/libs/c3/0.4.18/c3.js"
+            "https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.16/d3.min.js",
+            "https://cdnjs.cloudflare.com/ajax/libs/c3/0.4.10/c3.min.js"
         ],
         "fill_size": true,
         "settings": [{
-            "name": "id",
-            "display_name": "Char id"
-        }, {
             "name": "type",
             "display_name": "Type",
             "type": "option",
@@ -51,15 +48,21 @@
                 "value": "donut"
             }]
         }, {
-            "name": "columns",
-            "display_name": "Chart columns",
+            "name": "data",
+            "display_name": "Chart Data",
             "type": "calculated",
-            "description": "The columns to plot"
+            "description": "C3 Data JSON used with the c3.load and c3.flow methods"
         }, {
             "name": "options",
             "display_name": "Chart Options",
             "type": "calculated",
-            "description": "Extra options for rendering"
+            "description": "C3 options JSON used to configure the graph"
+        }, {
+            "name": "flow",
+            "display_name": "Append Data",
+            "type": "boolean",
+            "default_value": false,
+            "description": "Use c3.flow to append data rather than replacing all of the data"
         }, {
             "name": "height",
             "display_name": "Height Blocks",
@@ -119,88 +122,128 @@
     var freeboardC3Widget = function(settings) {
         var self = this;
         var currentSettings = settings;
+        var currentOptions = null;
         var chart = null;
-        var myElement = $('<div class="testing"></div>');
+        var element = $('<div class="c3-chart-container"></div>');
         var padding = {
             right: 0
         };
+        var flowBuffer = new Array();
+        var maxFlowBufferLength = 20;
 
-        if (currentSettings.type !== "gauge" &&
-            currentSettings.type !== "pie" &&
-            currentSettings.type !== "donut") {
-            padding.right = 8;
-        } else {
+        self.calculatePadding = function(type) {
             padding.right = 0;
+            if (type !== "gauge" &&
+                type !== "pie" &&
+                type !== "donut") {
+                padding.right = 8;
+            }
+        }
+
+        self.calculatePadding(currentSettings.type);
+
+        self.createChart = function(createSettings) {
+            // create our graph with empty data
+            var options = {
+                bindto: d3.selectAll(element.toArray()),
+                data: {
+                    type: createSettings.type,
+                    json: []
+                },
+                padding: padding,
+                size: {
+                    height: createSettings.height * 60
+                }
+            };
+
+            if((createSettings.options !== undefined) && (createSettings.options !== "")) {
+                // handle bad options
+                // without this, we will end up with empty C3 widgets at creation time
+                try {
+                    $.extend(options, createSettings.options);
+                } catch(e) {
+                    console.log(e);
+                }
+            }
+
+            chart = c3.generate(options);
         }
 
         self.render = function(containerElement) {
-            $(containerElement).append(myElement);
-
-            var options = {
-                bindto: d3.selectAll(myElement.toArray()),
-                data: {
-                    columns: eval(currentSettings.columns),
-                    type: currentSettings.type
-                },
-                padding: padding,
-                size: {
-                    height: currentSettings.height * 60
-                }
-            };
-
-            $.extend(options, eval(settings.options));
-
-            chart = c3.generate(options);
+            $(containerElement).empty();
+            $(containerElement).append(element);
         }
 
         self.getHeight = function() {
-            return currentSettings.height || 5;
+            return currentSettings.height || 60;
         }
 
         self.onSettingsChanged = function(newSettings) {
+            self.calculatePadding(newSettings.type);
 
-            if (newSettings.type !== "gauge" &&
-                newSettings.type !== "pie" &&
-                newSettings.type !== "donut") {
-                padding.right = 8;
-            } else {
-                padding.right = 0;
+            if(chart) {
+                // check if the options cleared
+                // empty "calculated" settings don't get sent to
+                // the onCalculatedValueChanged method
+                if (currentOptions && (newSettings.options === "")) {
+                    self.createChart(newSettings);
+                    currentOptions = null;
+                } else if (newSettings.type !== currentSettings.type) {
+                    chart.transform(newSettings.type);
+                }
             }
 
-            var options = {
-                bindto: d3.selectAll(myElement.toArray()),
-                data: {
-                    columns: eval(newSettings.columns),
-                    type: newSettings.type
-                },
-                padding: padding,
-                size: {
-                    height: newSettings.height * 60
-                }
-            };
-            $.extend(options, eval(settings.options));
-
-            chart = c3.generate(options);
-
-            console.log(chart.data.colors());
-            console.log(chart.data.axes());
+            // check if flow changed
+            // clear the flow buffer if it did
+            if(currentSettings.flow != newSettings.flow) {
+                flowBuffer = new Array();
+            }
 
             currentSettings = newSettings;
         }
 
         self.onCalculatedValueChanged = function(settingName, newValue) {
+            if(settingName === "options") {
+                // check if the options have changed by doing a JSON serialise
+                // and comparing the resulting output
+                if((!currentOptions) || (JSON.stringify(currentOptions) !== JSON.stringify(newValue))) {
+                    self.createChart({
+                        type: currentSettings.type,
+                        options: newValue,
+                        height: currentSettings.height
+                    });
+                    currentOptions = newValue;
+                }
+            }
 
-            if (settingName === "type") {
-                chart.transform(newValue);
-            } else if (settingName === "columns") {
-                chart.load(eval(newValue));
+            if(chart) {
+                if (settingName === "data") {
+                    // c3 fails to pop old values while the page is not visible
+                    // https://github.com/masayuki0812/c3/issues/1097
+                    // check if the page is visible, if not, accumulate values
+                    // but ensure we only store the last N values
+                    // to avoid memory issues
+                    if(currentSettings.flow) {
+                        if(document.hidden) {
+                            flowBuffer.push(newValue);
+                            while(flowBuffer.length > maxFlowBufferLength) {
+                                flowBuffer.shift();
+                            }
+                        } else {
+                            while(flowBuffer.length > 0) {
+                                chart.flow(flowBuffer.shift());
+                            }
+                            chart.flow(newValue);
+                        }
+                    } else {
+                        newValue.unload = null;
+                        chart.load(newValue);
+                    }
+                }
             }
         }
 
         self.onDispose = function() {
-
         }
-
     }
-
 }());

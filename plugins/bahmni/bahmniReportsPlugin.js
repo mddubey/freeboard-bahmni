@@ -52,19 +52,12 @@
         var currentSettings = settings;
 
         function getData() {
-            currentSettings["base_url"] = "https://localbahmni.org";
-            currentSettings["username"] = "random";
-            currentSettings["password"] = "ranodm"
-            currentSettings["report_name"] = "Obs count Co-morbidities";
-            currentSettings["refresh_time"] = "24000*60*60"
             currentSettings["startDate"] = new Date(new Date().setFullYear(new Date().getFullYear() - 1));
             currentSettings["endDate"] = new Date();
 
             var loginUrlFormat = "{BASE}/openmrs/ms/legacyui/loginServlet";
-            var loginURL = loginUrlFormat.replace("{BASE}", currentSettings.base_url)
-                .replace("{UNAME}", "superman")
-                .replace("{PW}", "Admin123");
-
+            var loginURL = loginUrlFormat.replace("{BASE}", currentSettings.base_url);
+                            
             var formatDate = function(date){
                 return date.getFullYear()+'-' + (date.getMonth()+1) + '-'+date.getDate();
             }
@@ -131,52 +124,4 @@
 
         createRefreshTimer(currentSettings.refresh_time);
     }
-
-
-    // ## A Widget Plugin
-    //
-    // -------------------
-    // ### Widget Definition
-    //
-    // -------------------
-    // **freeboard.loadWidgetPlugin(definition)** tells freeboard that we are giving it a widget plugin. It expects an object with the following:
-    freeboard.loadWidgetPlugin({
-        // Same stuff here as with datasource plugin.
-        "type_name": "my_widget_plugin",
-        "display_name": "Widget Plugin Example",
-        "description": "Some sort of description <strong>with optional html!</strong>",
-        // **external_scripts** : Any external scripts that should be loaded before the plugin instance is created.
-        "external_scripts": [
-            "http://mydomain.com/myscript1.js", "http://mydomain.com/myscript2.js"
-        ],
-        // **fill_size** : If this is set to true, the widget will fill be allowed to fill the entire space given it, otherwise it will contain an automatic padding of around 10 pixels around it.
-        "fill_size": false,
-        "settings": [
-            {
-                "name": "the_text",
-                "display_name": "Some Text",
-                // We'll use a calculated setting because we want what's displayed in this widget to be dynamic based on something changing (like a datasource).
-                "type": "calculated"
-            },
-            {
-                "name": "size",
-                "display_name": "Size",
-                "type": "option",
-                "options": [
-                    {
-                        "name": "Regular",
-                        "value": "regular"
-                    },
-                    {
-                        "name": "Big",
-                        "value": "big"
-                    }
-                ]
-            }
-        ],
-        // Same as with datasource plugin, but there is no updateCallback parameter in this case.
-        newInstance: function (settings, newInstanceCallback) {
-            newInstanceCallback(new myWidgetPlugin(settings));
-        }
-    });
 }());
