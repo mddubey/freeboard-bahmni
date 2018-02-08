@@ -9,33 +9,57 @@
                 "name": "base_url",
                 "display_name": "Base URL",
                 "description": "Bahmni Base URL, e.g.:- https://demo.mybahmni.org/",
-                "type": "text"
+                "type": "text",
+                "required": true
             },
             {
                 "name": "username",
                 "display_name": "Username",
                 "description": "Username for bahmni having reports API access",
-                "type": "text"
+                "type": "text",
+                "required": true
             },
             {
                 "name": "password",
                 "display_name": "Password",
                 "description": "Password for bahmni",
-                "type": "text"
+                "type": "text",
+                "required": true
             },
             {
                 "name": "report_name",
                 "display_name": "Report Name",
                 "description": "The Bahmni Report name",
-                "type": "text"
+                "type": "text",
+                "required": true
             },
             {
-                "name": "refresh_time",
-                "display_name": "Refresh Time",
-                "type": "text",
-                "description": "In milliseconds",
-                "default_value": 5000
-            }
+                "name": "period_value",
+                "display_name": "For Last",
+                "description": "Period for which data has to be fetched. Put a number",
+                "type": "number",
+                "required": true
+            },
+            {
+                "name"        : "period",
+                "display_name": "Period",
+                "type"        : "option",
+                "required": true,
+                "options"     : [
+                    {
+                        "name" : "Day(s)",
+                        "value": "day"
+                    },
+                    {
+                        "name" : "Year(s)",
+                        "value": "year"
+                    },
+                    {
+                        "name" : "Month(s)",
+                        "value": "month"
+                    }
+                ]
+            },
         ],
         // **newInstance(settings, newInstanceCallback, updateCallback)** (required) : A function that will be called when a new instance of this plugin is requested.
         // * **settings** : A javascript object with the initial settings set by the user. The names of the properties in the object will correspond to the setting names defined above.
@@ -52,14 +76,27 @@
         var currentSettings = settings;
 
         function getData() {
-            currentSettings["startDate"] = new Date(new Date().setFullYear(new Date().getFullYear() - 1));
-            currentSettings["endDate"] = new Date();
-
             var loginUrlFormat = "{BASE}/openmrs/ms/legacyui/loginServlet";
             var loginURL = loginUrlFormat.replace("{BASE}", currentSettings.base_url);
                             
             var formatDate = function(date){
                 return date.getFullYear()+'-' + (date.getMonth()+1) + '-'+date.getDate();
+            }
+
+            var calculateStartDate = function(currentSettings){
+                var today = new Date();
+                if (currentSettings["period"] === 'day') {
+                    today.setDate(today.getDate()-currentSettings["period_value"])
+                    return today;
+                }
+                if(currentSettings["period"] === 'month'){
+                    today.setMonth(today.getMonth()-currentSettings["period_value"])
+                    return today;  
+                }
+                if(currentSettings["period"] === 'year'){
+                    today.setFullYear(today.getFullYear()-currentSettings["period_value"])
+                    return today;
+                }
             }
 
             var onSuccessfulLogin = function (data, status, xhr) {
@@ -69,8 +106,10 @@
                 var data = {};
                 data["name"] = currentSettings["report_name"];
                 data["responseType"] = "application/json"
-                data["startDate"] = formatDate(currentSettings.startDate);
-                data["endDate"] = formatDate(currentSettings.endDate);
+
+                data["startDate"] = formatDate(calculateStartDate(currentSettings));
+                data["endDate"] = formatDate(new Date());
+                console.log("Fetching data from "+data["startDate"] + " to " + data["endDate"]);
 
                 reportURL = reportURL.replace("{BASE}", currentSettings.base_url);
                 jQuery.ajax({
@@ -97,18 +136,6 @@
             });
         }
 
-        var refreshTimer;
-
-        function createRefreshTimer(interval) {
-            if (refreshTimer) {
-                clearInterval(refreshTimer);
-            }
-
-            refreshTimer = setInterval(function () {
-                // getData();
-            }, interval);
-        }
- 
         self.onSettingsChanged = function (newSettings) {
             currentSettings = newSettings;
         }
@@ -118,10 +145,6 @@
         }
 
         self.onDispose = function () {
-            clearInterval(refreshTimer);
-            refreshTimer = undefined;
         }
-
-        createRefreshTimer(currentSettings.refresh_time);
     }
 }());
