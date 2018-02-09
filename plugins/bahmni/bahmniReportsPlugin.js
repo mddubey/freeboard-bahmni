@@ -117,10 +117,12 @@
                     type: 'GET',
                     data: data,
                     success: function (data) {
+                        alert("Data Fetch Completed");
                         updateCallback(data);
                     },
                     error: function (xhr, status) {
-                        console.log("Fetch Failed", xhr)
+                        console.log(xhr)
+                        alert("Data Fetch Failed")
                     }
                 })
 
@@ -131,6 +133,7 @@
                 data: {uname: currentSettings.username, pw: currentSettings.password},
                 success: onSuccessfulLogin,
                 error: function (xhr, status, error) {
+                    alert("Login Failed")
                     console.log("Login Failed", xhr)
                 }
             });
